@@ -1,0 +1,33 @@
+# Define some sources we are going to use
+FROM composer:2.3 as composer
+FROM caddy:2.5.1-alpine as caddy
+FROM php:7.4-fpm-alpine as base
+
+RUN docker-php-ext-install pdo_mysql
+
+#Starting building the image
+FROM php:7.4-fpm-alpine
+COPY --from=caddy /usr/bin/caddy /usr/local/bin/caddy
+
+# Install supervisor
+RUN apk add --no-cache \
+    supervisor && \
+    mkdir -p  \
+        /run \
+        /api && \
+    chown -R nobody.nobody  \
+        /run  \
+        /api
+
+# install pdo_mysql
+COPY --from=base /usr/local/lib/php/extensions/no-debug-non-zts-20190902/pdo_mysql.so \
+                 /usr/local/lib/php/extensions/no-debug-non-zts-20190902/pdo_mysql.so
+COPY --from=base /usr/local/etc/php/conf.d/docker-php-ext-pdo_mysql.ini \
+                 /usr/local/etc/php/conf.d/docker-php-ext-pdo_mysql.ini
+
+EXPOSE 80
+
+COPY site/ /site
+
+# Let supervisord start caddy & php-fpm
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
